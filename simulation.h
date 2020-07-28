@@ -38,8 +38,8 @@ private:
 // for sell orders'priority queue, the lower price, the more prior, so, it uses std::less
 // For the same price, the ealier it came, the more prior.
 
-    int time=0, orders=0, ttt_size;
-    unsigned int cmsn_earning, total_transfered, num_trades, num_shares;
+    int time=0, orders=0;
+    unsigned int cmsn_earning=0, total_transfered=0, num_trades=0, num_shares=0;
     bool verbose, median, midpoint, transfers, ttt;
     set<string> ttt_name;
     map<string, info> ttt_buy_info, ttt_sell_info; // first is buy, second is sell
@@ -55,15 +55,16 @@ private:
     map<string, int> active_sell_min;
     // active orders' min sell price and max buy price, {"euity_name": <<expire_data, info_min_sell>, <<expire_data, info_max_buy>>>}
     // clients' recored
-    map<string, int> client_buy, client_sell;
+    set<string> client_names;
+    map<string, int> client_transfers, client_buy, client_sell;
 
 public:
-    simulation(bool verbose, bool median, bool midpoint, bool transfers, bool ttt, int ttt_size, string * ttt_name = nullptr):
-    verbose(verbose), median(median), midpoint(midpoint), transfers(transfers), ttt(ttt), ttt_size(ttt_size){
-        for(int i = 0; i<ttt_size; i++) {
-            this->ttt_name.insert(ttt_name[i]);
-            this->ttt_buy_info[ttt_name[i]] = info();
-            this->ttt_sell_info[ttt_name[i]] = info();
+    simulation(bool verbose, bool median, bool midpoint, bool transfers, bool ttt, int ttt_size, const set<string> & ttt_name):
+    verbose(verbose), median(median), midpoint(midpoint), transfers(transfers), ttt(ttt){
+        for(auto it = ttt_name.begin(); it!=ttt_name.end();it++) {
+            this->ttt_name.insert(*it);
+            this->ttt_buy_info[*it] = info();
+            this->ttt_sell_info[*it] = info();
         }
     };
     ~simulation(){
@@ -225,18 +226,35 @@ public:
     }
 
     void test_add_client(const string& name){
-        if(client_buy.count(name)==0){
+        if(client_names.count(name)==0){
+            client_names.insert(name);
+            client_transfers[name] = 0;
             client_buy[name] = 0;
             client_sell[name] = 0;
         }
     }
 
-    void add_for_total(bool buy_or_sell, const string & client, int price, int quantity){
+    void add_for_total(bool buy_or_sell, const string & clientBuy, const string & clientSell, int price, int quantity){
         // add commision total earning, total money transfered, completed trades, completed shares, change client_buy/sell
         int com_earn = price*quantity/100;
         this->cmsn_earning += com_earn * 2;
-
-
+        this->total_transfered += price * quantity;
+        this->num_trades ++;
+        this->num_shares += quantity;
+        if(transfers) {
+            if(buy_or_sell) {//buy
+                this->client_buy[clientBuy] += quantity;
+                this->client_sell[clientSell] += quantity;
+                this->client_transfers[clientBuy] -= price * quantity;
+                this->client_transfers[clientSell] += price * quantity;
+            }
+            else{
+                this->client_sell[clientBuy] += quantity;
+                this->client_buy[clientSell] += quantity;
+                this->client_transfers[clientBuy] += price * quantity;
+                this->client_transfers[clientSell] -= price * quantity;
+            }
+        }
     }
 
     template<class compare_f = std::less<int>>
@@ -265,7 +283,7 @@ public:
                              << " for $" << temp_it->price << "/share" << endl;
                     }
                 }
-
+                add_for_total(buy_or_sell, client, temp_it->client, temp_it->price, temp_it->quantity);
                 temp.quantity -= temp_it->quantity;
                 equity[e_name][active_min_max[e_name]].erase(temp_it);
                 if(equity[e_name][active_min_max[e_name]].empty()) equity[e_name].erase(active_min_max[e_name]);
@@ -281,6 +299,7 @@ public:
             if (Compare(temp, *temp_it)) return temp.quantity;
             // fullfill
             add_traded_price(e_name, temp_it->price);
+            add_for_total(buy_or_sell, client, temp_it->client, temp_it->price, temp.quantity);
             // adjust the quantity
             info add_again = *temp_it;
             equity[e_name][active_min_max[e_name]].erase(temp_it);
@@ -303,29 +322,70 @@ public:
         }
     }
 
+    void print_transfers(){
+        for(auto it = client_names.begin(); it != client_names.end(); it++){
+            cout<<*it<<" bought "<<client_buy[*it]<<" and sold "<<client_sell[*it]
+                <<" for a net transfer of $"<<client_transfers[*it]<<endl;
+        }
+    }
+
+    void print_ttt(){
+        for(auto it = ttt_name.begin(); it!=ttt_name.end();it++){
+            cout<<"Time travelers would buy "<<*it<<" at time: "<<ttt_sell_info[*it].arrive_time
+            <<" and sell it at time: "<<ttt_buy_info[*it].arrive_time<<endl;
+        }
+    }
+
     void run() {
         int timestamp, price, amount, last;
-        string name, buy, ename, sprice, samount;
-        cmp<greater<int>> compare;
-        for (int i = 0; i < 16; i++) {
+        string name, buy, ename,sprice, samount;
+        for(int i = 0; i<16; i++) {
             cin >> timestamp >> name >> buy >> ename >> sprice >> samount >> last;
             price = stoi(sprice.substr(1));
             amount = stoi(samount.substr(1));
-            info this_order(name, price, amount, this->time, 0);
+            test_add_client(name);
+//            cout<<timestamp<<endl;
             if (timestamp != time) {
                 if (this->median) get_median();
                 if (this->midpoint) get_midpoint();
                 this->time = timestamp;
                 remove_expire();
+//                cout<<time<<endl;
+            }
+            if(buy=="BUY"){
+                int left = match_order<less<int>>(true, ename, name, price, last, amount, sell_equity, active_sell_min);
+                if(left==0) add_order<greater<int>>(ename, name, price, 0, amount, this->buy_equity,
+                                                    this->active_buy_max, this->ttt_buy_info);
+                else add_order<greater<int>>(ename, name, price, last, left, this->buy_equity,
+                                             this->active_buy_max, this->ttt_buy_info);
+            }
+            else{
+                int left = match_order<greater<int>>(false, ename, name, price, last, amount, buy_equity, active_buy_max);
+                if(left==0) add_order<less<int>>(ename, name, price, 0, amount, this->sell_equity,
+                                                 this->active_sell_min, this->ttt_sell_info);
+                else add_order<less<int>>(ename, name, price, last, left, this->sell_equity,
+                                          this->active_sell_min, this->ttt_sell_info);
             }
             orders++;
         }
+        if (this->median) get_median();
+        if (this->midpoint) get_midpoint();
+//        if(buy=="BUY") add_order(ename, name, price, last, amount, this->buy_equity,
+//                                 this->active_buy_max, this->ttt_buy_info);
+//        else  add_order(ename, name, price, last, amount, this->sell_equity,
+//                        this->active_sell_min, this->ttt_sell_info);
+        cout<<"---End of Day---"<<endl
+            <<"Commission Earnings: $"<<cmsn_earning<<endl
+            <<"Total Amount of Money Transferred: $"<<total_transfered<<endl
+            <<"Number of Completed Trades: "<<num_trades<<endl
+            <<"Number of Shares Traded: "<<num_shares<<endl;
+        if(transfers) print_transfers();
+        if(ttt) print_ttt();
     }
 
     void test_add(ifstream & file){
         int timestamp, price, amount, last;
         string name, buy, ename,sprice, samount;
-        cmp<greater<int>> compare;
         for(int i = 0; i<16; i++) {
             file >> timestamp >> name >> buy >> ename >> sprice >> samount >> last;
             price = stoi(sprice.substr(1));
@@ -384,7 +444,13 @@ public:
 //                                 this->active_buy_max, this->ttt_buy_info);
 //        else  add_order(ename, name, price, last, amount, this->sell_equity,
 //                        this->active_sell_min, this->ttt_sell_info);
-
+        cout<<"---End of Day---"<<endl
+        <<"Commission Earnings: $"<<cmsn_earning<<endl
+        <<"Total Amount of Money Transferred: $"<<total_transfered<<endl
+        <<"Number of Completed Trades: "<<num_trades<<endl
+        <<"Number of Shares Traded: "<<num_shares<<endl;
+        if(transfers) print_transfers();
+        if(ttt) print_ttt();
     }
 
 

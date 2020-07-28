@@ -1,0 +1,1 @@
+./coding4 --verbose --median --midpoint --transfers --ttt AMZN < ../test.txt
