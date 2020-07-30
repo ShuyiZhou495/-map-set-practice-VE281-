@@ -3,4 +3,4 @@ project(coding4)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(coding4 main.cpp simulation.h)
+add_executable(coding4 main.cpp simulation.h simulation.cpp)

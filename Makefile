@@ -1,5 +1,5 @@
 CC = g++
-MAINSRCS = main.cpp
+MAINSRCS = main.cpp simulation.cpp
 OTHSRCS =
 HEADERS = simulation.h
 SRCS = $(MAINSRCS) $(OTHSRCS)

@@ -1,7 +1,7 @@
 ./coding4 --verbose --median --midpoint --transfers --ttt AMZN < test.txt
 
 compress
-tar -zcvf test9.tar.gz Makefile main.cpp simulation.h
+tar -zcvf test11.tar.gz Makefile main.cpp simulation.h simulation.cpp
 
 ./main --verbose -m -p --transfers --ttt AMZN --ttt AMD< test2.txt >myout.txt
 ./main3 --verbose -m -p --transfers --ttt AMZN --ttt AMD< test2.txt >myout2.txt
