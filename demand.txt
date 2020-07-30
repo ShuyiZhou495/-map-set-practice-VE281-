@@ -1,1 +1,12 @@
-./coding4 --verbose --median --midpoint --transfers --ttt AMZN < ../test.txt
+./coding4 --verbose --median --midpoint --transfers --ttt AMZN < test.txt
+
+compress
+tar -zcvf test9.tar.gz Makefile main.cpp simulation.h
+
+./main --verbose -m -p --transfers --ttt AMZN --ttt AMD< test2.txt >myout.txt
+./main3 --verbose -m -p --transfers --ttt AMZN --ttt AMD< test2.txt >myout2.txt
+diff myout.txt myout2.txt
+
+./main --verbose --midpoint --transfers --ttt AMZN < test2.txt >myout.txt
+./main2 --verbose --midpoint --transfers --ttt AMZN < test2.txt >myout2.txt
+diff myout.txt myout2.txt
